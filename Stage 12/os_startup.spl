@@ -6,7 +6,7 @@ loadi(64,14);
 loadi(4, 17);
 loadi(5, 18);
 
-//INT 7
+//INT 7(Write Interrrupt)
 loadi(16,29);
 loadi(17,30);
 
