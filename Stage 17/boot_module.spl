@@ -54,20 +54,13 @@ loadi(43, 56);
 loadi(44, 57);
 loadi(45, 58);
 
+loadi(59,3);
+loadi(60,4);
+
 //Initializing Memory Free List
 alias i R0;
 i=0;
-while(i<128) do
-	if(i<76) then
-		[MEMORY_FREE_LIST + i] = 1;
-	else
-		[MEMORY_FREE_LIST + i] = 0;
-	endif;
-	i = i + 1;
-endwhile;
 
-[MEMORY_FREE_LIST + 81] = 1;
-[MEMORY_FREE_LIST + 82] = 1;
 
 // For INIT
 PTBR = PAGE_TABLE_BASE + 20;
@@ -113,17 +106,21 @@ PTLR = 10;
 
 [76 * 512] = [65 * 512 + 1];
 
-[MEMORY_FREE_LIST + 76] = 1;
-[MEMORY_FREE_LIST + 77] = 1;
-[MEMORY_FREE_LIST + 78] = 1;
-[MEMORY_FREE_LIST + 79] = 1;
-[MEMORY_FREE_LIST + 80] = 1;
 
-alias i R0;
 i = 2;
 while (i < 16) do
     [PROCESS_TABLE + i * 16 + 4] = TERMINATED;
     i = i + 1;
+endwhile;
+
+i=0;
+while(i<=82)do
+	[MEMORY_FREE_LIST+i]=1;
+	i=i+1;
+endwhile;
+while(i<=127)do
+	[MEMORY_FREE_LIST+i]=0;
+	i=i+1;
 endwhile;
 
 [TERMINAL_STATUS_TABLE + 0] = 0;
