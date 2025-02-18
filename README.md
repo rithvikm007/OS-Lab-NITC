@@ -14,3 +14,5 @@ If you encounter any mistakes or bugs in the code, please feel free to contact m
 - **GitHub**: [rithvikm007](https://github.com/rithvikm007)
 
 I'll be happy to help resolve any issues you may face :)
+
+Special thanks to [dhwanish-3](https://github.com/dhwanish-3?tab=overview&from=2024-12-01&to=2024-12-31), their repo helped me a lot when I faced issues with code.
