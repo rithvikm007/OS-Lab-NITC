@@ -6,8 +6,11 @@ alias currentPID R2;
 // GET PCB Entry
 if(fnNumber == 1) then
 	alias PID R0;
-	
-	while([PROCESS_TABLE + PID*16 + 4] != TERMINATED) do
+	PID = 1;	
+	while(PID<16) do
+		if([PROCESS_TABLE + PID*16 + 4] == TERMINATED) then
+			break;
+		endif;
 		PID = PID + 1;
 	endwhile;
 	if(PID > 15) then
@@ -34,21 +37,6 @@ if(fnNumber == 2) then
 	breakpoint;
 	call MOD_2;
 	multipop(R1, R2, R3);
-	alias resTab R4; 
-    resTab = ([PROCESS_TABLE + currentPID*16 + 11] + 1)*512 - 16;
-	alias i R5;
-	i=0;
-	while(i<16) do 
-		if([resTab + 2*i] == 1) then
-	    	multipush(R1, R2, R3, R4, R5);
-	    	R1 = 7;
-	    	R3 = currentPID;
-	    	R2 = [resTab + 2*i + 1];
-	    	call MOD_0;
-	    	multipop(R1, R2, R3, R4, R5);  
-		endif;
-		i = i + 1;
-	endwhile;
 	return;
 endif;
 
