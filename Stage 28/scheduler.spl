@@ -1,0 +1,136 @@
+
+multipush(BP);
+
+R1 = 2;
+call MOD_8;
+
+alias currentPID R0;
+currentPID = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+
+alias process_table_entry R1;
+process_table_entry = PROCESS_TABLE + currentPID * 16;
+
+[process_table_entry + 12] = SP % 512;
+[process_table_entry + 14] = PTBR;
+[process_table_entry + 15] = PTLR;
+
+alias iter R2;
+alias newPID R3;
+
+if(CORE == PRIMARY_CORE) then
+	if([SYSTEM_STATUS_TABLE + 5] != 0) then
+		if([PROCESS_TABLE + 15*16 + 4] == WAIT_DISK) then 
+			newPID = 0;
+		else
+			newPID = 15;
+		endif;
+	else
+
+		iter = currentPID + 1;
+		if(iter > 13) then
+			iter = 1;
+		endif;
+
+		while(iter != currentPID) do
+
+			if(([PROCESS_TABLE + iter * 16 + 4] == CREATED || [PROCESS_TABLE + iter * 16 + 4] == READY) && [PROCESS_TABLE + iter * 16 + 6] == 0 &&  iter != [SYSTEM_STATUS_TABLE + 6]) then
+				newPID = iter;
+				break;
+			endif;
+	
+			iter = iter + 1;
+	
+			if(iter > 13) then
+	
+				if(currentPID == 0 || currentPID == 15) then
+					iter = currentPID;
+					break;
+				endif;
+		
+				iter = 1;
+			endif;
+	
+		endwhile;
+		
+		if(iter == currentPID) then
+			newPID = 0;
+		endif;
+	endif;
+	
+	if(([SYSTEM_STATUS_TABLE + 7] == 1)) then
+		if([SYSTEM_STATUS_TABLE + 6] != 14) then
+			newPID = 0;
+		else
+			newPID = currentPID;
+		endif;
+	endif;
+	[SYSTEM_STATUS_TABLE + 1] = newPID;
+else
+	
+	if([SYSTEM_STATUS_TABLE + 5] != 0 || [SYSTEM_STATUS_TABLE + 7] == 1) then
+		newPID = 14;
+	else
+
+		iter = currentPID + 1;
+
+		if(iter < 3 || iter > 14) then
+			iter = 3;
+		endif;
+	
+		while(iter != currentPID) do
+
+			if(([PROCESS_TABLE + iter * 16 + 4] == CREATED || [PROCESS_TABLE + iter * 16 + 4] == READY) && [PROCESS_TABLE + iter * 16 + 6] == 0 && iter != [SYSTEM_STATUS_TABLE + 1]) then
+				newPID = iter;
+				break;
+			endif;
+	
+			iter = iter + 1;
+	
+			if(iter > 14) then
+				if(currentPID == 14) then
+					iter = currentPID;
+					break;
+				endif;
+				iter = 3;
+			endif;
+		endwhile;
+
+		if(iter == currentPID) then
+			newPID = 14;
+		endif;
+	endif;
+	[SYSTEM_STATUS_TABLE + 6] = newPID;
+endif;
+
+
+alias new_process_table R4;
+new_process_table = PROCESS_TABLE + newPID * 16;
+
+SP = [new_process_table + 11] * 512 + [new_process_table + 12];
+PTBR = [new_process_table + 14];
+PTLR = [new_process_table + 15];
+
+if([new_process_table + 4] == CREATED) then
+	multipush(R4);
+	R1 = 4;
+	R2 = ACCESS_LOCK_TABLE + 1;
+	call MOD_8;
+	multipop(R4);
+	
+	BP = [[new_process_table + 11] * 512];
+	SP = [new_process_table + 13];
+	[new_process_table + 4] = RUNNING;
+	[new_process_table + 9] = 0; //setting mode flag to 0
+	
+	ireturn;
+endif;
+
+[new_process_table + 4] = RUNNING;
+
+multipush(R1,R2,R3,R4);
+R1 = 4;
+R2 = ACCESS_LOCK_TABLE + 1;
+call MOD_8;
+multipop(R1,R2,R3,R4);
+multipop(BP);
+return;

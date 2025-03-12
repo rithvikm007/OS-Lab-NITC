@@ -1,0 +1,172 @@
+alias functionNum R1;
+alias currentPID R2;
+
+//Buffered Read or Write
+if(functionNum == 2 || functionNum == 1) then
+	alias blockNum R3;
+	alias offset R4;
+	alias addr R5;
+	alias pageNum R6;
+	alias bufferNum R7;
+	bufferNum = blockNum % 4;
+	pageNum = 71 + bufferNum;
+	
+	multipush(R1,R2,R3,R4,R5,R6,R7);
+	R1 = 1;
+	R3 = bufferNum;
+	call MOD_0;
+	multipop(R1,R2,R3,R4,R5,R6,R7);
+	
+	alias buffer_entry R8;
+	buffer_entry = BUFFER_TABLE + bufferNum*4;
+	
+	if([buffer_entry] != blockNum) then
+		
+		if([buffer_entry + 1] == 1) then
+			
+			multipush(R1,R2,R3,R4,R5,R6,R7,R8);
+			R1 = 1;
+			R3 = pageNum;
+			R4 = [buffer_entry];
+			call MOD_4;
+			multipop(R1,R2,R3,R4,R5,R6,R7,R8);
+			
+			[buffer_entry + 1] = 0;
+		endif;
+		
+		multipush(R1,R2,R3,R4,R5,R6,R7,R8);
+		R1 = 2;
+		R4 = blockNum;
+		R3 = pageNum;
+		call MOD_4;
+		multipop(R1,R2,R3,R4,R5,R6,R7,R8);
+		[buffer_entry] = blockNum;
+	endif;
+	
+	if(functionNum == 2) then
+		[[[PROCESS_TABLE + currentPID*16 + 14] + 2 * (addr/512)] * 512 + (addr%512)] = [pageNum*512 + offset];
+	else
+		[pageNum*512 + offset] = addr; 
+		[buffer_entry + 1] = 1;
+	endif;
+	multipush(R1,R2,R3,R4,R5,R6,R7,R8);
+	R1 = 2;
+	R3 = bufferNum;
+	call MOD_0;
+	multipop(R1,R2,R3,R4,R5,R6,R7,R8);
+	return;
+endif;
+
+//Open
+if(functionNum == 3) then
+	alias fileName R3;
+	alias inode_table_entry R4;
+	alias index R5;
+	
+	index = 0;
+	while(index < MAX_FILE_NUM) do
+		inode_table_entry = INODE_TABLE + (index * 16);
+		if([inode_table_entry + 1] == fileName) then
+			break;
+		endif;
+		index = index + 1;
+	endwhile;
+	
+	if(index == MAX_FILE_NUM) then
+		R0 = -1;
+		return;
+	endif;
+	
+	multipush(R1,R2,R3,R4,R5);
+	R1 = 4;
+	R3 = index;
+	call MOD_0;
+	multipop(R1,R2,R3,R4,R5);
+	
+
+	if(R0 == -1) then
+		return;
+	endif;
+
+	if([inode_table_entry] == EXEC) then
+		multipush(R1,R2,R3,R4,R5);
+		R1 = 5;
+		R3 = index;
+		call MOD_0;
+		multipop(R1,R2,R3,R4,R5);
+		
+		R0 = -1;
+		return;
+	endif;
+	alias open_ft_index R6;
+	alias open_ft_entry R7;
+	open_ft_index = 0;
+	while(open_ft_index < MAX_OPENFILE_NUM) do
+		if([OPEN_FILE_TABLE + open_ft_index*4] == -1) then
+			open_ft_entry = OPEN_FILE_TABLE + open_ft_index*4;
+			break;
+		endif;
+		open_ft_index = open_ft_index + 1;
+	endwhile;
+	
+	if(open_ft_index == MAX_OPENFILE_NUM) then
+		multipush(R1,R2,R3,R4,R5,R6);
+		R1 = 5;
+		R3 = index;
+		call MOD_0;
+		multipop(R1,R2,R3,R4,R5,R6);
+		
+		R0 = -2;
+		return;
+	endif;
+	
+	if(fileName == "root") then
+		[open_ft_entry] = INODE_ROOT;
+	else
+		if([FILE_STATUS_TABLE + 4*index + 1] == -1) then
+			[FILE_STATUS_TABLE + 4*index + 1] = 1;
+		else
+			[FILE_STATUS_TABLE + 4*index + 1] = [FILE_STATUS_TABLE + 4*index + 1] + 1;
+		endif; 
+		[open_ft_entry] = index;
+	endif;
+
+	[open_ft_entry + 1] = 1;
+	[open_ft_entry + 2] = 0;
+
+	multipush(R1,R2,R3,R4,R5,R6);
+	R1 = 5;
+	R3 = index;
+	call MOD_0;
+	multipop(R1,R2,R3,R4,R5,R6);
+	
+	R0 = open_ft_index;
+	return;
+endif;
+
+//Close
+if(functionNum == 4) then
+	alias open_ft_index R3;
+	alias inode_index R4;
+	alias open_ft_entry R5;
+	
+	open_ft_entry = OPEN_FILE_TABLE + open_ft_index*4;
+	
+	inode_index = [open_ft_entry];
+	[open_ft_entry + 1] = [open_ft_entry + 1] - 1;
+	
+	if([open_ft_entry + 1] == 0) then
+		[open_ft_entry] = -1;
+		[open_ft_entry + 1] = -1;
+		[open_ft_entry + 2] = -1;
+		[open_ft_entry + 3] = -1;
+		
+		if([INODE_TABLE + inode_index*16] != "root") then
+			[FILE_STATUS_TABLE + 4*inode_index + 1] = [FILE_STATUS_TABLE + 4*inode_index + 1] - 1;
+			if([FILE_STATUS_TABLE + 4*inode_index + 1] == 0) then
+				[FILE_STATUS_TABLE + 4*inode_index + 1] = -1;
+			endif;
+		endif;
+	endif;
+	return;
+endif;

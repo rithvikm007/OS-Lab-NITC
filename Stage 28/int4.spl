@@ -1,0 +1,243 @@
+alias userSp R9;
+alias pte R10;
+
+pte = PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16);
+
+userSp = SP;
+[pte + 13] = SP;
+SP = [pte + 11] * 512 - 1;
+
+multipush(R9,R10);
+R1 = 1;
+call MOD_8;
+multipop(R9,R10);
+
+alias syscallNum R1;
+alias ptbr R8;
+ptbr = [ pte + 14];
+
+syscallNum = [[ptbr + 2*((userSp - 5)/512)] * 512 + (userSp - 5)%512]; 
+
+alias filename R2;
+alias retAddr R3;
+retAddr = [ptbr + 2*((userSp - 1)/512)] * 512 + (userSp - 1)%512;
+filename = [[ptbr + 2*((userSp - 4)/512)] * 512 + (userSp - 4)%512];
+
+//Create 
+if(syscallNum == 1) then
+	alias perm R4;
+	perm = [[ptbr + 2*((userSp - 3)/512)] * 512 + (userSp - 3)%512];
+	
+	[pte + 9] = 1;
+	
+	alias iter R5;
+	
+	iter = 0;
+	while(iter<MAX_FILE_NUM) do
+		
+		if([INODE_TABLE + iter* 16 + 1] == filename) then
+			[retAddr] = 0;
+			[pte + 9] = 0;
+			
+			multipush(R9);
+			R1 = 4;
+			R2 = ACCESS_LOCK_TABLE;
+			call MOD_8;
+			multipop(R9);
+			
+			SP = userSp;
+			ireturn;
+		endif;
+		
+		iter = iter + 1;
+	endwhile;
+	
+	iter = 0;
+	while(iter<MAX_FILE_NUM) do
+		
+		if([INODE_TABLE + iter* 16 + 1] == -1) then
+			break;
+		endif;
+		
+		iter = iter + 1;
+	endwhile;
+	
+	if(iter == MAX_FILE_NUM) then
+		[retAddr] = -1;
+		[pte + 9] = 0;
+		multipush(R9);
+		R1 = 4;
+		R2 = ACCESS_LOCK_TABLE;
+		call MOD_8;
+		multipop(R9);
+		
+		SP = userSp;
+		ireturn;
+	endif;
+	
+	alias temp R6;
+	temp = INODE_TABLE + iter*16;
+	
+	[temp] = DATA;
+	[temp + 1] = filename;
+	[temp + 2] = 0;
+	
+	[temp + 3] = [pte + 3];
+	[temp + 4] = perm;
+	
+	[temp + 8] = -1;
+	[temp + 9] = -1;
+	[temp + 10] = -1;
+	[temp + 11] = -1;
+	
+	temp = ROOT_FILE + iter*8;
+	
+	[temp] = filename;
+	[temp + 1] = 0;
+	[temp + 2] = DATA;
+	[temp + 3] = [USER_TABLE + 2*[pte + 3]];
+	[temp + 4] = perm;
+	
+	
+	[retAddr] = 0;
+	[pte + 9] = 0;
+	
+	multipush(R9);
+	R1 = 4;
+	R2 = ACCESS_LOCK_TABLE;
+	call MOD_8;
+	multipop(R9);
+	SP = userSp;
+	ireturn;
+endif;
+
+//Delete
+if(syscallNum == 4) then
+	[pte + 9] = 4;
+	
+	alias iter R4;
+	
+	iter = 0;
+	while(iter<MAX_FILE_NUM) do
+		
+		if([INODE_TABLE + iter* 16 + 1] == filename) then
+			break;
+		endif;
+		
+		iter = iter + 1;
+	endwhile;
+	
+	if(iter == MAX_FILE_NUM) then
+		[retAddr] = 0;
+		[pte + 9] = 0;
+		
+		multipush(R9);
+		R1 = 4;
+		R2 = ACCESS_LOCK_TABLE;
+		call MOD_8;
+		multipop(R9);
+		
+		SP = userSp;
+		ireturn;
+	endif;
+	
+	if([INODE_TABLE + iter * 16] != DATA) then
+		[retAddr] = -1;
+		[pte + 9] = 0;
+		
+		multipush(R9);
+		R1 = 4;
+		R2 = ACCESS_LOCK_TABLE;
+		call MOD_8;
+		multipop(R9);
+		
+		SP = userSp;
+		ireturn;
+	endif;
+	
+	if([INODE_TABLE + iter*16 + 4] == 0) then
+		if([INODE_TABLE + iter*16 + 3] != 1 && [INODE_TABLE + iter*16 + 3] != [pte + 3]) then
+			[retAddr] = -1;
+			[pte + 9] = 0;
+			
+			multipush(R9);
+			R1 = 4;
+			R2 = ACCESS_LOCK_TABLE;
+			call MOD_8;
+			multipop(R9);
+			
+			SP = userSp;
+			ireturn;
+		endif;
+	endif;
+	
+	multipush(R1,R2,R3,R4,R8,R9,R10);
+	R1 = 4;
+	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+	R3 = iter;
+	call MOD_0;
+	multipop(R1,R2,R3,R4,R8,R9,R10);
+	
+	if([FILE_STATUS_TABLE + iter* 4 + 1] != -1) then
+		[retAddr] = -2;
+		[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE+ 1] * 16) + 9] = 0;
+		
+		multipush(R9);
+		R1 = 4;
+		R2 = ACCESS_LOCK_TABLE;
+		call MOD_8;
+		multipop(R9);
+		
+		SP = userSp;
+		ireturn;
+	endif;
+	
+	alias i R5;
+	alias j R6;
+	
+	i = 0;
+	while(i < 4) do
+		if([INODE_TABLE + iter* 16 + 8 + i] != -1) then
+			j = 0;
+			while(j < 4) do
+				if([BUFFER_TABLE + j*4] == [INODE_TABLE + iter*16 + 8 + i] && [BUFFER_TABLE + j*4 + 1] == 1) then
+					[BUFFER_TABLE + j*4 + 1] = 0;
+				endif;
+				j = j + 1;
+			endwhile;
+			
+			multipush(R1,R2,R3,R4,R5,R6);
+			R1 = 4;
+			R2 = [INODE_TABLE + iter* 16 + 8 + i];
+			call MOD_2;
+			multipop(R1,R2,R3,R4,R5,R6);
+		endif;
+		i = i + 1;
+	endwhile;
+	
+	i = 0;
+	while(i<16) do
+		[INODE_TABLE + iter*16 + i] = -1;
+		i = i + 1;
+	endwhile;
+	
+	[ROOT_FILE + iter*8] = -1;
+
+	multipush(R1,R2,R3,R4,R5,R6);
+	R1 = 5;
+	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+	R3 = iter;
+	call MOD_0;
+	multipop(R1,R2,R3,R4,R5,R6);
+	
+	[retAddr] = 0;
+	[pte + 9] = 0;
+	
+	multipush(R9);
+	R1 = 4;
+	R2 = ACCESS_LOCK_TABLE;
+	call MOD_8;
+	multipop(R9);
+	SP = userSp;
+	ireturn;
+endif;

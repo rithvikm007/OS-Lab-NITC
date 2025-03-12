@@ -1,0 +1,316 @@
+//load exception handler routine from disk to memory
+loadi(2, 15);
+loadi(3, 16);
+
+//load timer interrupt
+loadi(4,17);
+loadi(5,18);
+
+//load console interrupt
+loadi(8,21);
+loadi(9,22);
+
+//load disk interrupt
+loadi(6,19);
+loadi(7,20);
+
+//load INT 4
+loadi(10,23);
+loadi(11,24);
+
+//load INT5
+loadi(12,25);
+loadi(13,26);
+
+//load INT 6
+loadi(14,27);
+loadi(15,28);
+
+//load INT7 
+loadi(16,29);
+loadi(17,30);
+
+//load INT8
+loadi(18,31);
+loadi(19,32);
+
+//load INT9
+loadi(20,33);
+loadi(21,34);
+
+//load INT 10 module from disk to memory
+loadi(22,35);
+loadi(23,36);
+
+//load INT11
+loadi(24,37);
+loadi(25,38);
+
+//load INT12
+loadi(26,39);
+loadi(27,40);
+
+//load INT13
+loadi(28,41);
+loadi(29,42);
+
+//load INT14
+loadi(30,43);
+loadi(31,44);
+
+//load INT15
+loadi(32,45);
+loadi(33,46);
+
+//load INT16
+loadi(34,47);
+loadi(35,48);
+
+//load INT17
+loadi(36,49);
+loadi(37,50);
+
+//load the library code
+loadi(63,13);
+loadi(64,14);
+
+//load MOD 0
+loadi(40,53);
+loadi(41,54);
+
+//load MOD1
+loadi(42,55);
+loadi(43,56);
+
+//load MOD2
+loadi(44,57);
+loadi(45,58);
+
+//load MOD3
+loadi(46,59);
+loadi(47,60);
+
+//load MOD 4
+loadi(48,61);
+loadi(49,62);
+
+//load MOD 5
+loadi(50,63);
+loadi(51,64);
+
+//load MOD 6
+loadi(52,65);
+loadi(53,66);
+
+//load inode table
+loadi(59,3);
+loadi(60,4);
+
+//load disk free list
+loadi(61,2);
+
+//load root file
+loadi(62,5);
+
+//load the shell program
+loadi(67,9);
+loadi(68,10);
+
+//load the init program
+loadi(65,7);
+
+
+
+
+
+
+
+[TERMINAL_STATUS_TABLE] = 0;
+
+
+//Login
+
+PTBR = PAGE_TABLE_BASE+20;
+PTLR = 10;
+
+alias ProcessTableEntry R1;
+ProcessTableEntry = PROCESS_TABLE + 16;
+
+//Adding data to process table
+[ProcessTableEntry + 11] = 77; 
+[ProcessTableEntry] = 0; 
+[ProcessTableEntry + 1] = 1; 
+[ProcessTableEntry + 3] = 1;
+[ProcessTableEntry + 4] = CREATED;
+[ProcessTableEntry + 13] = 8*512;
+[ProcessTableEntry + 12] = 0;
+[ProcessTableEntry + 14] = PTBR;
+[ProcessTableEntry + 15] = PTLR;
+
+
+//library
+[PTBR+0] = 63;
+[PTBR+1] = "0100";
+[PTBR+2] = 64;
+[PTBR+3] = "0100";
+
+//heap
+[PTBR+4] = -1;
+[PTBR+5] = "0000";
+[PTBR+6] = -1;
+[PTBR+7] = "0000";
+
+//Code
+[PTBR+8] = 65;
+[PTBR+9] = "0100";
+[PTBR+10] = -1;
+[PTBR+11] = "0000";
+[PTBR+12] = -1;
+[PTBR+13] = "0000";
+[PTBR+14] = -1;
+[PTBR+15] = "0000";
+
+//Stack
+[PTBR+16] = 66;
+[PTBR+17] = "0110";
+[PTBR+18] = -1;
+[PTBR+19] = "0000";
+
+//Setting top of stack to the second word in header
+[66*512] = [65*512 + 1];
+
+
+//Shell
+
+PTBR = PAGE_TABLE_BASE+40;
+PTLR = 10;
+
+
+ProcessTableEntry = PROCESS_TABLE + 2*16;
+
+[ProcessTableEntry + 11] = 80;
+[ProcessTableEntry] = 0; 
+[ProcessTableEntry + 1] = 2;
+[ProcessTableEntry + 2] = 1; 
+
+[ProcessTableEntry + 4] = TERMINATED;
+[ProcessTableEntry + 13] = 8*512;
+[ProcessTableEntry + 12] = 0;
+[ProcessTableEntry + 14] = PTBR;
+[ProcessTableEntry + 15] = PTLR;
+
+
+//library
+[PTBR+0] = 63;
+[PTBR+1] = "0100";
+[PTBR+2] = 64;
+[PTBR+3] = "0100";
+
+//heap
+[PTBR+4] = -1;
+[PTBR+5] = "0000";
+[PTBR+6] = -1;
+[PTBR+7] = "0000";
+
+//Code
+[PTBR+8] = 67;
+[PTBR+9] = "0100";
+[PTBR+10] = 68;
+[PTBR+11] = "0100";
+[PTBR+12] = -1;
+[PTBR+13] = "0000";
+[PTBR+14] = -1;
+[PTBR+15] = "0000";
+
+//Stack
+[PTBR+16] = 78;
+[PTBR+17] = "0110";
+[PTBR+18] = 79;
+[PTBR+19] = "0110";
+
+[78*512] = [67*512 + 1];
+
+alias disk_mt_entry R2;
+alias iter R3;
+
+disk_mt_entry = DISK_MAP_TABLE + 2*10;
+
+iter = 0;
+while(iter < 10) do
+	[disk_mt_entry + iter] = -1;
+	iter = iter + 1;	
+endwhile;
+
+[disk_mt_entry + 4] = 9;
+[disk_mt_entry + 5] = 10;
+
+iter = 3;
+while(iter < 15) do
+	[PROCESS_TABLE + 16*iter] = 0;
+	[PROCESS_TABLE + 16*iter + 4] = TERMINATED;
+	iter = iter + 1;
+endwhile;
+
+
+
+iter = 0;
+while(iter < 128) do
+	if(iter <= 84) then
+		[MEMORY_FREE_LIST + iter] = 1;
+	else
+		[MEMORY_FREE_LIST + iter] = 0;
+	endif;
+	
+	iter = iter + 1;
+endwhile;
+
+[SYSTEM_STATUS_TABLE + 2] = 43; 
+[SYSTEM_STATUS_TABLE + 3] = 0; 
+[SYSTEM_STATUS_TABLE + 4] = 0;
+[SYSTEM_STATUS_TABLE + 5] = 0;
+[SYSTEM_STATUS_TABLE + 6] = 14; 
+[SYSTEM_STATUS_TABLE + 7] = 0;
+
+[ACCESS_LOCK_TABLE] = 0;
+[ACCESS_LOCK_TABLE + 1] = 0;
+
+[DISK_STATUS_TABLE] = 0;
+[TERMINAL_STATUS_TABLE] = 0;
+
+iter = 0;
+while(iter < MAX_SEM_COUNT) do
+	[SEMAPHORE_TABLE + iter*4] = -1;
+	[SEMAPHORE_TABLE + iter*4 + 1] = 0;
+	iter = iter + 1;
+endwhile;
+
+iter = 0;
+while(iter < MAX_OPENFILE_NUM) do
+	[OPEN_FILE_TABLE + iter*4] = -1;
+	[OPEN_FILE_TABLE + iter*4 + 1] = 0;
+	iter = iter + 1;
+endwhile;
+
+iter = 0;
+while(iter<MAX_BUFFER) do
+	[BUFFER_TABLE + iter*4] = -1;
+	[BUFFER_TABLE + iter*4 + 1] = 0;
+	[BUFFER_TABLE + iter*4 + 2] = -1;
+	iter = iter + 1;
+endwhile;
+
+iter = 0;
+while(iter < MAX_FILE_NUM) do
+	[FILE_STATUS_TABLE + iter*4] = -1;
+	[FILE_STATUS_TABLE + iter*4 + 1] = -1;
+	iter = iter + 1;
+endwhile;
+
+iter = 0;
+while(iter < 16) do
+	[(80 * 512) + 496 + iter] = -1;
+	[(77 * 512) + 496 + iter] = -1;
+	iter = iter + 1;
+endwhile;
+
+return;

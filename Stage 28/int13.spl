@@ -1,0 +1,123 @@
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13] = SP;
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 11] * 512 - 1;
+
+R1 = 1;
+call MOD_8;
+
+alias userSp R1;
+alias syscallNum R2;
+alias ptbr R3;
+
+ptbr = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 14];
+userSp = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13];
+syscallNum = [[ptbr + 2 * ((userSp - 5)/512)] * 512 + ((userSp - 5)%512)];
+
+//Semget
+if(syscallNum == 17) then
+	[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 9] = 17;
+	
+	alias userAreaPage R4;
+	alias iter R5;
+	
+	userAreaPage = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 11];
+	
+	iter = 0;
+	while( iter < 8 && [(userAreaPage) * 512 + 496 + 2*iter] != - 1) do
+		iter = iter + 1;
+	endwhile;
+	if(iter == 8) then
+		[[ptbr + 2 * ((userSp - 1)/512)] * 512 + ((userSp - 1)%512)] = -1;
+		
+		[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]* 16) + 9] = 0;
+
+		R1 = 4;
+		R2 = ACCESS_LOCK_TABLE;
+		call MOD_8;
+		
+		SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13];
+		ireturn;
+	endif;
+	
+	alias perProcessTable R6;
+	perProcessTable = (userAreaPage) * 512 + 496 + 2*iter;
+
+	[perProcessTable] = 1;
+	
+	multipush(R1,R2,R3,R4,R5,R6);
+	R1 = 6;
+	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+	call MOD_0;
+	multipop(R1,R2,R3,R4,R5,R6); 
+	
+	if(R0 == -1) then
+		[[ptbr + 2 * ((userSp - 1)/512)] * 512 + ((userSp - 1)%512)] = -2;
+		
+		[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]* 16) + 9] = 0;
+		R1 = 4;
+		R2 = ACCESS_LOCK_TABLE;
+		call MOD_8;
+		
+		SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13];
+		ireturn;
+	endif;
+	[perProcessTable + 1] = R0;
+	
+	
+	[[ptbr + 2 * ((userSp - 1)/512)] * 512 + ((userSp - 1)%512)] = iter;
+	[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]* 16) + 9] = 0;
+	R1 = 4;
+	R2 = ACCESS_LOCK_TABLE;
+	call MOD_8;
+		
+	SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13];
+	ireturn;
+endif;
+
+
+//Semrelease
+if(syscallNum == 18) then
+	[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 9] = 18;
+	
+	alias userAreaPage R4;
+	alias iter R5;
+	alias semDesc R6;
+	
+	userAreaPage = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 11];
+	
+	semDesc = [[ptbr + 2 * ((userSp - 4)/512)] * 512 + ((userSp - 4)%512)];
+	
+	if( semDesc > 7 || semDesc < 0 || [(userAreaPage + 1) * 512 - 16 + 2*semDesc] == - 1) then
+		[[ptbr + 2 * ((userSp - 1)/512)] * 512 + ((userSp - 1)%512)] = -1;
+		[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]* 16) + 9] = 0;
+		R1 = 4;
+		R2 = ACCESS_LOCK_TABLE;
+		call MOD_8;
+		
+		SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13];
+		ireturn;
+	endif;
+	
+	multipush(R1,R2,R3,R4,R5,R6);
+	R1 = 7;
+	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+	R3 = [(userAreaPage) * 512 + 496 + 2*semDesc + 1 ];
+	multipop(R1,R2,R3,R4,R5,R6);
+	
+	[(userAreaPage + 1) * 512 - 16 + 2*semDesc] = -1;
+	
+	[[ptbr + 2 * ((userSp - 1)/512)] * 512 + ((userSp - 1)%512)] = 0;
+	[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]* 16) + 9] = 0;
+	R1 = 4;
+	R2 = ACCESS_LOCK_TABLE;
+	call MOD_8;
+		
+	SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13];
+	ireturn;
+endif;
+
+R1 = 4;
+R2 = ACCESS_LOCK_TABLE;
+call MOD_8;
+		
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13];
+ireturn;

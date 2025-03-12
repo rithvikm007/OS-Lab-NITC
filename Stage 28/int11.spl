@@ -1,0 +1,93 @@
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13] = SP;
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 11] * 512 - 1;
+
+R1 = 1;
+call MOD_8;
+
+alias userSp R1;
+alias syscallNum R2;
+alias ptbr R3;
+
+ptbr = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 14];
+userSp = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13];
+syscallNum = [[ptbr + 2 * ((userSp - 5)/512)] * 512 + ((userSp - 5)%512)];
+
+//Get pid
+if(syscallNum == 11) then
+	[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]* 16) + 9] = 11;
+	[[ptbr + 2 * ((userSp - 1)/512)] * 512 + ((userSp - 1)%512)] = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]* 16) + 1];	
+	[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]* 16) + 9] = 0;
+endif;
+
+//Get ppid
+if(syscallNum == 12) then
+	[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]* 16) + 9] = 12;
+	[[ptbr + 2 * ((userSp - 1)/512)] * 512 + ((userSp - 1)%512)] = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]* 16) + 2];	
+	[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]* 16) + 9] = 0;
+endif;
+
+//Wait
+if(syscallNum == 13) then
+	[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]* 16) + 9] = 13;
+	
+	alias pid R4;
+	pid = [[ptbr + 2 * ((userSp - 4)/512)] * 512 + ((userSp - 4)%512)];
+	if((pid == [SYSTEM_STATUS_TABLE + 5*CORE + 1]) || pid < 0 || pid >= 16 || ([PROCESS_TABLE + (pid * 16) + 4] == TERMINATED)) then
+		[[ptbr + 2 * ((userSp - 1)/512)] * 512 + ((userSp - 1)%512)] = -1;
+		
+		[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]* 16) + 9] = 0;
+		
+		R1 = 4;
+		R2 = ACCESS_LOCK_TABLE;
+		call MOD_8;
+		
+		SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13];
+		ireturn;
+	endif;
+	
+	[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]* 16) + 4] = WAIT_PROCESS;
+	[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]* 16) + 5] = pid;
+	
+	multipush(R1,R2,R3,R4);
+	R1 = 4;
+	R2 = ACCESS_LOCK_TABLE;
+	call MOD_8;
+	multipop(R1,R2,R3,R4);
+	
+	multipush(R1,R2,R3,R4);
+	call MOD_5;
+	multipop(R1,R2,R3,R4);
+	
+	multipush(R1,R2,R3,R4);
+	R1 = 1;
+	call MOD_8;
+	multipop(R1,R2,R3,R4);
+	
+	[[ptbr + 2 * ((userSp - 1)/512)] * 512 + ((userSp - 1)%512)] = 0;	
+	[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]* 16) + 9] = 0;
+endif;
+
+//Signal
+if(syscallNum == 14) then
+	[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]* 16) + 9] = 14;
+	
+	alias iter R4;
+	iter = 0;
+
+	while(iter < 16) do
+		if([PROCESS_TABLE + (iter*16) + 4] == WAIT_PROCESS && [PROCESS_TABLE + (iter*16) + 5] == [SYSTEM_STATUS_TABLE + 5*CORE + 1]) then
+			[PROCESS_TABLE + (iter*16) + 4] = READY;
+		endif;
+		iter = iter + 1;
+	endwhile;
+	
+	[[ptbr + 2 * ((userSp - 1)/512)] * 512 + ((userSp - 1)%512)] = 0;	
+	[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]* 16) + 9] = 0;
+endif;
+
+R1 = 4;
+R2 = ACCESS_LOCK_TABLE;
+call MOD_8;
+
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13];
+ireturn;

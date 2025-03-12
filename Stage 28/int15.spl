@@ -1,0 +1,90 @@
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13] = SP;
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 11] * 512 - 1;
+
+R1 = 1;
+call MOD_8;
+
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 9] = 21;
+
+alias userSp R1;
+userSp = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13];
+
+alias ptbr R2;
+ptbr = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 14];
+
+if( [SYSTEM_STATUS_TABLE + 5*CORE + 1] != 2 || [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 3] != 1) then
+	[[ptbr + 2*((userSp-1)/512)] * 512 + (userSp-1)%512] = -1;
+	[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 9] = 0;
+	
+	R1 = 4;
+	R2 = ACCESS_LOCK_TABLE;
+	call MOD_8;
+	
+	SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13];
+	ireturn;
+endif;
+
+
+reset;
+[ACCESS_LOCK_TABLE + 1] = 0;
+
+multipush(R1,R2);
+R1 = 5;
+R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+call MOD_1;
+multipop(R1,R2);
+
+alias iter R9;
+
+iter = 0;
+while(iter<4) do
+	if([BUFFER_TABLE + iter*4 + 1] == 1) then
+		multipush(R1,R2,R9);
+		R1 = 1;
+		R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+		R4 = [BUFFER_TABLE + iter*4];
+		R3 = 71+iter;
+		call MOD_4;
+		multipop(R1,R2,R9);	
+		[BUFFER_TABLE + iter*4 + 1] = 0;
+	endif;
+	iter = iter + 1;
+endwhile;
+
+multipush(R1,R2,R9);
+R1 = 1;
+R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+R3 = 59;
+R4 = 3;
+call MOD_4;
+multipop(R1,R2,R9);
+
+multipush(R1,R2,R9);
+R1 = 1;
+R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+R3 = 60;
+R4 = 4;
+call MOD_4;
+multipop(R1,R2,R9);
+
+multipush(R1,R2,R9);
+R1 = 1;
+R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+R3 = 62;
+R4 = 5;
+call MOD_4;
+multipop(R1,R2,R9);
+
+multipush(R1,R2,R9);
+R1 = 1;
+R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+R3 = 61;
+R4 = 2;
+call MOD_4;
+multipop(R1,R2,R9);
+
+R1 = 4;
+R2 = ACCESS_LOCK_TABLE;
+call MOD_8;
+
+halt;

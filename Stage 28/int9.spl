@@ -1,0 +1,146 @@
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]*16) + 9] = 9;
+
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]*16) + 13] = SP;
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]*16) + 11] * 512 - 1;
+
+R1 = 1;
+call MOD_8;
+
+alias userSp R0;
+userSp = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]*16) + 13];
+
+alias fileName R1;
+fileName = [[PTBR + 2*((userSp - 4)/512)] * 512 + ((userSp - 4)%512)];
+
+alias index R2;
+alias inode_table_entry R3;
+alias found R4;
+
+index = 0;
+found = 0;
+
+while(index < MAX_FILE_NUM) do
+
+	inode_table_entry = INODE_TABLE + (index * 16);
+	if([inode_table_entry + 1] == fileName && [inode_table_entry] == EXEC) then
+		found = 1;
+		break;
+	endif;
+	
+	index = index + 1;
+endwhile;
+
+if(found == 0) then
+	[[PTBR + 2*((userSp - 1)/512)] * 512 + ((userSp - 1)%512)] = -1;
+		
+	[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]*16) + 9] = 0;
+	SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]*16) + 13];
+	R1 = 4;
+	R2 = ACCESS_LOCK_TABLE;
+	call MOD_8;
+	ireturn;
+endif;
+
+
+
+multipush(R0,R1,R2,R3,R4);
+R1 = 3;
+R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+call MOD_1;
+multipop(R0,R1,R2,R3,R4);
+
+[MEMORY_FREE_LIST + [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]*16) + 11]] = 1;
+[SYSTEM_STATUS_TABLE + 2] = [SYSTEM_STATUS_TABLE + 2] - 1;
+
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]*16) + 11] * 512 - 1;
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]*16) + 4] = RUNNING;
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]*16) + 7] = index;
+
+
+alias iter R6;
+iter = 0;
+while(iter < 16) do
+	[(([PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]*16) + 11] + 1) * 512 ) - 16 + iter] = -1;
+	iter = iter + 1;
+endwhile;
+
+alias ptbr R5;
+ptbr = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]*16) + 14];
+
+//library
+[ptbr+0] = 63;
+[ptbr+1] = "0100";
+[ptbr+2] = 64;
+[ptbr+3] = "0100";
+
+//heap
+[ptbr+4] = -1;
+[ptbr+5] = "0000";
+
+[ptbr+6] = -1;
+[ptbr+7] = "0000";
+
+
+//Stack
+multipush(R0,R1,R2,R3,R4,R5,R6);
+R1 = 1;
+call MOD_2;
+R7 = R0;
+multipop(R0,R1,R2,R3,R4,R5,R6);
+[ptbr+16] = R7;
+[ptbr+17] = "0110";
+
+multipush(R0,R1,R2,R3,R4,R5,R6);
+R1 = 1;
+call MOD_2;
+R7 = R0;
+multipop(R0,R1,R2,R3,R4,R5,R6);
+[ptbr+18] = R7;
+[ptbr+19] = "0110";
+
+//Code Page
+if([INODE_TABLE + (index*16) + 8] != - 1) then
+	multipush(R0,R1,R2,R3,R4,R5,R6);
+	R1 = 5;
+	R2 = [INODE_TABLE + (index*16) + 8];
+	call MOD_2;
+	[[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]*16) + 14]+ 8] = R0;
+	[[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]*16) + 14]+ 9] = "0100";
+	multipop(R0,R1,R2,R3,R4,R5,R6);
+else
+	[ptbr+ 8] = -1;
+	[ptbr+ 9] = "0000";
+endif;
+
+[ptbr + 10] = -1;
+[ptbr + 11] = "0000";
+[ptbr + 12] = -1;
+[ptbr + 13] = "0000";
+[ptbr + 14] = -1;
+[ptbr + 15] = "0000";	
+
+[[ptbr + 16] * 512] = [[ptbr + 8] * 512 + 1];
+
+
+alias disk_map_table_entry R7;
+disk_map_table_entry = DISK_MAP_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*10;
+
+[disk_map_table_entry + 0] = -1;
+[disk_map_table_entry + 1] = -1;
+[disk_map_table_entry + 2] = -1;
+[disk_map_table_entry + 3] = -1;
+[disk_map_table_entry + 4] = [INODE_TABLE + (index*16) + 8];
+[disk_map_table_entry + 5] = [INODE_TABLE + (index*16) + 9];
+[disk_map_table_entry + 6] = [INODE_TABLE + (index*16) + 10];
+[disk_map_table_entry + 7] = [INODE_TABLE + (index*16) + 11];
+[disk_map_table_entry + 8] = -1;
+[disk_map_table_entry + 9] = -1;
+
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1]*16) + 9] = 0;
+
+R1 = 4;
+R2 = ACCESS_LOCK_TABLE;
+call MOD_8;
+
+SP = 8*512;
+ireturn;

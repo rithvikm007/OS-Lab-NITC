@@ -1,0 +1,294 @@
+alias userSp R1;
+alias pte R2;
+alias currentPID R3;
+
+userSp = SP;
+pte = PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16;
+[pte + 13] = SP;
+SP = [pte + 11] * 512 - 1;
+
+multipush(R1,R2,R3);
+
+R1 = 1;
+call MOD_8;
+multipop(R1,R2,R3);
+
+
+alias retAddr R4;
+alias syscallNum R5;
+alias currentUserID R6;
+alias username R7;
+
+alias iter R9;
+
+currentPID = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+retAddr = [[pte + 14] + 2*((userSp-1)/512)] * 512 + ((userSp - 1)%512);
+syscallNum = [[[pte + 14] + 2*((userSp-5)/512)] * 512 + ((userSp - 5)%512)];
+currentUserID = [pte+3];
+username = [[[pte + 14] + 2*((userSp-4)/512)] * 512 + ((userSp - 4)%512)];
+
+[pte + 9] = syscallNum;
+
+
+//Newusr
+if(syscallNum == 22) then
+	alias pwd R8;
+	pwd = [[[pte + 14] + 2*((userSp-3)/512)] * 512 + ((userSp - 3)%512)];
+	if(currentUserID != 1 || currentPID != 2) then
+		[retAddr] = -2;
+		
+		[pte + 9] = 0;
+		
+		multipush(R1);
+		R1 = 4;
+		R2 = ACCESS_LOCK_TABLE;
+		call MOD_8;
+		multipop(R1);
+		
+		SP = userSp;
+		ireturn;
+	endif;
+
+	iter = 0;
+	while(iter < MAX_USER_NUM) do
+		if([USER_TABLE + 2*iter] == -1) then
+			break;
+		endif;
+		iter = iter + 1;
+	endwhile;
+	
+	if(iter == MAX_USER_NUM) then
+		[retAddr] = -3;
+		[pte + 9] = 0;
+		
+		multipush(R1);
+		R1 = 4;
+		R2 = ACCESS_LOCK_TABLE;
+		call MOD_8;
+		multipop(R1);
+		
+		SP = userSp;
+		ireturn;
+	endif;
+	
+	encrypt pwd;
+	
+	[USER_TABLE + 2*iter] = username;
+	[USER_TABLE + 2*iter + 1] = pwd;
+	
+	[retAddr] = 0;
+	
+endif;
+
+//Remusr
+if(syscallNum == 23) then
+	if(currentUserID != 1 || currentPID != 2) then
+		[retAddr] = -2;
+		[pte + 9] = 0;
+		
+		multipush(R1);
+		R1 = 4;
+		R2 = ACCESS_LOCK_TABLE;
+		call MOD_8;
+		multipop(R1);
+		
+		SP = userSp;
+		ireturn;
+	endif;
+	if(username == "root" || username == "kernel") then
+		[retAddr] = -2;
+		[pte + 9] = 0;
+		
+		multipush(R1);
+		R1 = 4;
+		R2 = ACCESS_LOCK_TABLE;
+		call MOD_8;
+		multipop(R1);
+		
+		SP = userSp;
+		ireturn;
+	endif;
+	
+	iter = 0;
+	while(iter < MAX_USER_NUM) do
+		if([USER_TABLE + 2*iter] == username) then
+			break;
+		endif;
+		iter = iter + 1;
+	endwhile;
+	
+	if(iter == MAX_USER_NUM) then
+		[retAddr] = -1;
+		[pte + 9] = 0;
+		
+		multipush(R1);
+		R1 = 4;
+		R2 = ACCESS_LOCK_TABLE;
+		call MOD_8;
+		multipop(R1);
+		
+		SP = userSp;
+		ireturn;
+	endif;
+	
+	alias user_tb_entry R10;
+	user_tb_entry = USER_TABLE + 2*iter;
+	
+	iter = 0;
+	while(iter < MAX_FILE_NUM) do
+		if([ROOT_FILE + iter*8 + 3] == username && [ROOT_FILE + iter*8] !=-1) then
+			[retAddr] = -3;
+			[pte + 9] = 0;
+			
+			multipush(R1);
+			R1 = 4;
+			R2 = ACCESS_LOCK_TABLE;
+			call MOD_8;
+			multipop(R1);
+		
+			SP = userSp;
+			ireturn;
+		endif;
+		iter = iter + 1;
+	endwhile;
+	
+	[user_tb_entry] = -1;
+	[user_tb_entry + 1] = -1;
+	
+	[retAddr] = 0;	
+	
+endif;
+
+//Setpwd
+if(syscallNum == 24) then
+	alias pwd R8;
+	pwd = [[[pte + 14] + 2*((userSp-3)/512)] * 512 + ((userSp - 3)%512)];
+	if(currentPID != 2) then
+		[retAddr] = -2;
+		[pte + 9] = 0;
+		
+		multipush(R1);
+		R1 = 4;
+		R2 = ACCESS_LOCK_TABLE;
+		call MOD_8;
+		multipop(R1);
+		
+		SP = userSp;
+		ireturn;
+	endif;
+	
+	iter = 0;
+	while(iter < MAX_USER_NUM) do
+		if([USER_TABLE + 2*iter] == username) then
+			break;
+		endif;
+		iter = iter + 1;
+	endwhile;
+	
+	if(iter == MAX_USER_NUM) then
+		[retAddr] = -2;
+		[pte + 9] = 0;
+		
+		multipush(R1);
+		R1 = 4;
+		R2 = ACCESS_LOCK_TABLE;
+		call MOD_8;
+		multipop(R1);
+		
+		SP = userSp;
+		ireturn;
+	endif;
+	
+	if([pte + 3] != iter && [pte+3] != 1) then
+		[retAddr] = -1;
+		[pte + 9] = 0;
+		
+		multipush(R1);
+		R1 = 4;
+		R2 = ACCESS_LOCK_TABLE;
+		call MOD_8;
+		multipop(R1);
+		
+		SP = userSp;
+		ireturn;
+	endif;
+	
+	encrypt pwd;
+	[USER_TABLE + 2*iter + 1] = pwd;
+	
+	[retAddr] = 0;
+	
+endif;
+
+//Getuname
+if(syscallNum == 25) then
+	
+	alias userID R7;	
+	
+	
+	if(userID < 0 || userID > 15) then
+		[retAddr] = -1;
+		[pte + 9] = 0;
+		
+		multipush(R1);
+		R1 = 4;
+		R2 = ACCESS_LOCK_TABLE;
+		call MOD_8;
+		multipop(R1);
+		SP = userSp;
+		ireturn;
+	endif;
+	
+	if([USER_TABLE + userID*2] == -1) then
+		[retAddr] = -1;
+		[pte + 9] = 0;
+		
+		multipush(R1);
+		R1 = 4;
+		R2 = ACCESS_LOCK_TABLE;
+		call MOD_8;
+		multipop(R1);
+		
+		SP = userSp;
+		ireturn;
+	endif;
+	
+	[retAddr] = [USER_TABLE + userID*2];
+endif;
+
+//Getuid
+if(syscallNum == 26) then
+	iter = 0;
+	while(iter < MAX_USER_NUM) do
+		if([USER_TABLE + 2*iter] == username) then
+			[retAddr] = iter;
+			break;
+		endif;
+		iter = iter + 1;
+	endwhile;
+	
+	if(iter == MAX_USER_NUM) then
+		[retAddr] = -1;
+		[pte + 9] = 0;
+		
+		multipush(R1);
+		R1 = 4;
+		R2 = ACCESS_LOCK_TABLE;
+		call MOD_8;
+		multipop(R1);
+		
+		SP = userSp;
+		ireturn;
+	endif;
+	
+endif;
+[pte + 9] = 0;
+
+multipush(R1);
+R1 = 4;
+R2 = ACCESS_LOCK_TABLE;
+call MOD_8;
+multipop(R1);
+		
+SP = userSp;
+ireturn;

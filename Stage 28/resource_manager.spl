@@ -1,0 +1,250 @@
+alias functionNum R1;
+alias currentPID R2;
+
+//acquire buffer
+if(functionNum == 1) then
+	//argument
+	alias buffer_index R3;
+	alias buffer_entry R4;
+	buffer_entry = BUFFER_TABLE + buffer_index * 4;
+	
+	while([buffer_entry + 2] != -1) do
+		[PROCESS_TABLE + currentPID*16 + 4] = WAIT_BUFFER;
+		[PROCESS_TABLE + currentPID*16 + 5] = buffer_index;
+		multipush(R1,R2,R3,R4);
+		R1 = 4;
+		R2 = ACCESS_LOCK_TABLE;
+		call MOD_8;
+		multipop(R1,R2,R3,R4);
+		
+		multipush(R1,R2,R3,R4);
+		call MOD_5;
+		multipop(R1,R2,R3,R4);
+		
+		multipush(R1,R2,R3,R4);
+		R1 = 1;
+		call MOD_8;
+		multipop(R1,R2,R3,R4);
+	endwhile;
+	
+	[buffer_entry + 2] = currentPID;
+	return;
+endif;
+
+//Release buffer
+if(functionNum == 2) then
+	alias buffer_index R3;
+	
+	alias buffer_entry R4;
+	buffer_entry = BUFFER_TABLE + buffer_index * 4;
+	
+	if([buffer_entry + 2] != currentPID) then
+		R0 = -1;
+		return;
+	endif;
+	
+	[buffer_entry + 2] = -1;
+	
+	alias iter R5;
+	iter = 0;
+	while(iter < 16) do
+		if([PROCESS_TABLE + iter*16 + 4] == WAIT_BUFFER && [PROCESS_TABLE + iter*16 + 5] == buffer_index) then
+			[PROCESS_TABLE + iter*16 + 4] = READY;
+		endif;
+		iter = iter + 1;
+	endwhile;
+	
+	R0 = 0;
+	return;
+endif;
+
+//Acquire disk
+if(functionNum == 3) then
+	while([DISK_STATUS_TABLE] == 1) do
+		[PROCESS_TABLE + (currentPID*16) + 4] = WAIT_DISK;
+		
+		multipush(R1,R2);
+		R1 = 4;
+		R2 = ACCESS_LOCK_TABLE;
+		call MOD_8;
+		multipop(R1,R2);
+		
+		multipush(R1,R2);
+		call MOD_5;
+		multipop(R1,R2);
+		
+		multipush(R1,R2);
+		R1 = 1;
+		call MOD_8;
+		multipop(R1,R2);
+		
+	endwhile;
+	
+	[DISK_STATUS_TABLE + 0] = 1;
+	[DISK_STATUS_TABLE + 4] = currentPID;
+	return;
+	
+endif;
+
+//Acquire inode
+if(functionNum == 4) then
+	alias index R3;
+	
+	while([FILE_STATUS_TABLE + index*4] != -1) do
+		[PROCESS_TABLE + (currentPID * 16) + 4] = WAIT_FILE;
+		[PROCESS_TABLE + (currentPID * 16) + 5] = index;
+		
+		multipush(R1,R2,R3);
+		R1 = 4;
+		R2 = ACCESS_LOCK_TABLE;
+		call MOD_8;
+		multipop(R1,R2,R3);
+		
+		multipush(R1,R2,R3);
+		call MOD_5;
+		multipop(R1,R2,R3);
+		
+		multipush(R1,R2,R3);
+		R1 = 1;
+		call MOD_8;
+		multipop(R1,R2,R3);
+	endwhile;
+	
+	if([INODE_TABLE + index*16 + 1] == -1) then
+		R0 = -1;
+		return;
+	endif;
+	
+	[FILE_STATUS_TABLE + index*4] = currentPID;
+	R0 = 0;
+	return;
+	
+endif;
+
+//Release inode
+if(functionNum == 5) then
+	
+	alias index R3;
+	
+	if([FILE_STATUS_TABLE + index*4] != currentPID) then
+		R0 = -1;
+		return;
+	endif;
+	
+	[FILE_STATUS_TABLE + index*4] = -1;
+	
+	alias iter R4;
+	iter = 0;
+	while(iter < 16) do
+		if([PROCESS_TABLE + (iter * 16) + 4] == WAIT_FILE && [PROCESS_TABLE + (iter * 16) + 5] == index) then
+			[PROCESS_TABLE + (iter * 16) + 4] = READY;
+		endif;
+		iter = iter + 1;
+	endwhile;
+	
+	R0 = 0;
+	return;
+endif;
+
+//Acquire semaphore
+if(functionNum == 6) then
+	
+	alias iter R3;
+	
+	iter = 0;
+	while(iter < MAX_SEM_COUNT) do 
+		if([SEMAPHORE_TABLE + iter*4 + 1] == 0) then
+			[SEMAPHORE_TABLE + iter*4 + 1] = 1;
+			[SEMAPHORE_TABLE + iter*4 + 0] = -1;
+			
+			R0 = iter;
+			return;
+		endif;
+		iter = iter + 1;
+	endwhile;
+	
+	R0 = -1;
+	return;
+endif;
+
+
+//Release Semaphore
+if(functionNum == 7) then
+	alias sem_id R3;
+	alias iter R4;
+	
+
+	
+	if( [SEMAPHORE_TABLE + 4*sem_id] == currentPID) then
+		[SEMAPHORE_TABLE + 4*sem_id] = -1;
+		
+		iter = 0;
+		while(iter < 16) do
+			if(([PROCESS_TABLE + iter * 16 + 4] == WAIT_SEMAPHORE) && ([PROCESS_TABLE + iter * 16 + 5] == sem_id)) then
+				[PROCESS_TABLE + iter * 16 + 4] = READY;
+			endif;
+			iter = iter + 1;
+		endwhile;
+		
+		[SEMAPHORE_TABLE + 4*sem_id + 1] = [SEMAPHORE_TABLE + 4*sem_id + 1] - 1;
+	endif;
+	
+	
+	R0 = 0;
+	return;
+endif;
+
+//Acquire terminal
+if(functionNum == 8) then
+	while([TERMINAL_STATUS_TABLE] == 1) do
+		[PROCESS_TABLE + (currentPID * 16) + 4] = WAIT_TERMINAL;
+		
+		multipush(R1,R2);
+		R1 = 4;
+		R2 = ACCESS_LOCK_TABLE;
+		call MOD_8;
+		multipop(R1,R2);
+		
+		multipush(R1,R2);
+		call MOD_5;
+		multipop(R1,R2);
+		
+		multipush(R1,R2);
+		R1 = 1;
+		call MOD_8;
+		multipop(R1,R2);
+		
+	endwhile;
+	
+	[TERMINAL_STATUS_TABLE] = 1;
+	[TERMINAL_STATUS_TABLE+1] = currentPID;
+	
+	return;
+endif;
+
+//Release terminal
+if(functionNum == 9) then 
+	if([TERMINAL_STATUS_TABLE + 1] != currentPID) then
+		R0 = -1;
+		
+		return;
+	else
+	
+		[TERMINAL_STATUS_TABLE] = 0;
+		
+		alias i R3;
+		i = 0;
+		
+		while(i < 16) do
+			alias val R4;
+			val = [PROCESS_TABLE + (i * 16) + 4];
+			if(val == WAIT_TERMINAL) then
+				[PROCESS_TABLE + (i * 16) + 4] = READY;
+			endif;
+			i = i +1;
+		endwhile;
+		R0 = 0;
+		
+		return;
+	endif;
+endif;

@@ -1,0 +1,137 @@
+//load the library code
+loadi(63,13);
+loadi(64,14);
+
+//load IDLE Program
+loadi(69,11);
+
+//load module 7
+loadi(54,67);
+loadi(55,68);
+
+//secondary bootstrap loader code
+loadi(128,512);
+
+//load access control modules
+loadi(132,516);
+loadi(133,517);
+
+
+
+//IDLE
+
+
+SP = 76 * 512 + 1;
+call BOOT_MODULE;
+
+
+
+PTBR = PAGE_TABLE_BASE;
+PTLR = 10;
+
+[PROCESS_TABLE + 0] = 0; //tick to 0
+[PROCESS_TABLE + 1] = 0;
+[PROCESS_TABLE + 4] = RUNNING;
+[PROCESS_TABLE + 11] = 76;    //Update user area page
+[PROCESS_TABLE + 13] = 8*512; //User Stack Pointer update
+[PROCESS_TABLE + 12] = 0;     // KPTR to 0
+[PROCESS_TABLE + 14] = PTBR;
+[PROCESS_TABLE + 15] = PTLR;
+
+alias iter R1;
+
+iter = 0;
+while(iter < 10) do
+	[PTBR + 2*iter] = -1;
+	[PTBR + 2*iter + 1] = "0000";
+	iter = iter + 1;
+endwhile;
+
+//Code
+[PTBR+8] = 69;
+[PTBR+9] = "0100";
+
+//Stack
+[PTBR+16] = 70;
+[PTBR+17] = "0110";
+
+
+[70*512] = [69*512 + 1];
+[SYSTEM_STATUS_TABLE + 1] = 0;
+
+SP = 8*512;
+
+//IDLE2
+
+
+PTBR = PAGE_TABLE_BASE + 14*20;
+PTLR = 10;
+
+alias pte R2;
+pte = PROCESS_TABLE + 14*16;
+
+[pte + 0] = 0; 
+[pte + 1] = 14;
+[pte + 4] = RUNNING;
+[pte + 11] = 84;    
+[pte + 13] = 8*512; 
+[pte + 12] = 0;    
+[pte + 14] = PTBR;
+[pte + 15] = PTLR;
+
+
+iter = 0;
+while(iter < 10) do
+	[PTBR + 2*iter] = -1;
+	[PTBR + 2*iter + 1] = "0000";
+	iter = iter + 1;
+endwhile;
+
+//Code
+[PTBR+8] = 69;
+[PTBR+9] = "0100";
+
+//Stack
+[PTBR+16] = 83;
+[PTBR+17] = "0110";
+
+
+start;
+
+//SWAPPER
+PTBR = PAGE_TABLE_BASE + 15*20;
+PTLR = 10;
+
+pte = PROCESS_TABLE + 15*16;
+[pte] = 0;
+[pte + 1] = 15;
+[pte + 4] = CREATED;
+[pte + 11] = 82;  
+[pte + 13] = 8*512;
+[pte + 12] = 0;  
+[pte + 14] = PTBR;
+[pte + 15] = PTLR;
+
+
+iter = 0;
+while(iter < 10) do
+	[PTBR + 2*iter] = -1;
+	[PTBR + 2*iter + 1] = "0000";
+	iter = iter + 1;
+endwhile;
+
+//Code
+[PTBR+8] = 69;
+[PTBR+9] = "0100";
+
+//Stack
+[PTBR+16] = 81;
+[PTBR+17] = "0110";
+
+
+[81*512] = [69*512 + 1];
+
+PTBR = PAGE_TABLE_BASE;
+PTLR = 10;
+SP = 8*512;
+ireturn;

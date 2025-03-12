@@ -1,0 +1,55 @@
+alias functionNum R1;
+
+// Acquire Kernel Lock
+if(functionNum == 1) then
+	if(CORE == SECONDARY_CORE) then
+		if(([SYSTEM_STATUS_TABLE + 5] == 1) || ([SYSTEM_STATUS_TABLE + 7] == 1)) then
+			[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 4] = READY;
+			
+			multipush(R1);
+			call MOD_5;
+			multipop(R1);
+		endif;
+	endif;
+	
+
+	while( tsl(KERN_LOCK) == 1) do
+		continue;
+	endwhile;
+	
+	return;
+endif;
+
+// Acquire Scheduler Lock
+if(functionNum == 2) then
+
+	while( tsl(SCHED_LOCK) == 1) do
+		continue;
+	endwhile;
+	
+	return;
+endif;
+
+// Acquire Glock
+if(functionNum == 3) then
+	while( tsl(GLOCK) == 1) do
+		continue;
+	endwhile;
+	
+	return;
+endif;
+
+// Release Lock
+if(functionNum == 4) then
+	alias LockVarAddress R2;
+	
+	if(LockVarAddress == ACCESS_LOCK_TABLE + 1) then
+		[SCHED_LOCK] = 0;
+	endif;
+	
+	if(LockVarAddress == ACCESS_LOCK_TABLE) then
+		[KERN_LOCK] = 0;
+	endif;
+	
+	return;
+endif;

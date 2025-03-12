@@ -1,0 +1,216 @@
+alias functionNum R1;
+alias currentPID R2;
+
+//Get PCB entry
+if(functionNum == 1) then
+	alias iter R3;
+	iter = 0;
+	
+	while(iter < 16) do
+		if([PROCESS_TABLE + (iter * 16) + 4] == TERMINATED) then
+			[PROCESS_TABLE + (iter * 16) + 1] = iter;
+			[PROCESS_TABLE + (iter * 16) + 4] = ALLOCATED;
+			[PROCESS_TABLE + (iter * 16) + 14] = PAGE_TABLE_BASE + (iter * 20);
+			[PROCESS_TABLE + (iter * 16) + 15] = 10;
+			R0 = iter;
+			return;
+		endif;
+		iter = iter + 1;
+	endwhile;
+	R0 = -1;
+	return;	
+	
+endif;
+
+//Free User Area Page
+if(functionNum == 2) then
+	alias userAreaPage R3;
+	userAreaPage = [PROCESS_TABLE + (currentPID * 16) + 11];
+	alias iter R4;
+	iter = 0;
+	while(iter < 8) do
+		if([((userAreaPage) * 512) + 496 + 2*iter] == SEMAPHORE) then
+			multipush(R1,R2,R3,R4);
+			R1 = 7;
+			R2 = currentPID;
+			R3 = [((userAreaPage) * 512) + 496 + 2*iter + 1];
+			call MOD_0;
+			multipop(R1,R2,R3,R4);
+		endif;
+		if([((userAreaPage) * 512) + 496 + 2*iter] == FILE) then
+			multipush(R1,R2,R3,R4);
+			R1 = 4;
+			R2 = currentPID;
+			R3 = [((userAreaPage) * 512) + 496 + 2*iter + 1];
+			call MOD_3;
+			multipop(R1,R2,R3,R4);
+		endif;
+		[((userAreaPage) * 512) + 496 + 2*iter] = -1;
+		[((userAreaPage) * 512) + 496 + 2*iter + 1] = -1;
+		iter = iter + 1;
+	endwhile;
+	
+	multipush(R1,R2,R3,R4);
+	R1 = 2;
+	R2 = userAreaPage;
+	call MOD_2;
+	multipop(R1,R2,R3,R4);
+	
+	return;
+endif;
+
+//Exit Process
+if(functionNum == 3) then
+	alias iter R3;
+	iter = 0;
+	
+	if([PROCESS_TABLE + (currentPID * 16) + 9] != 9) then
+		while(iter < 16) do
+			if([PROCESS_TABLE + (iter * 16) + 4] == WAIT_PROCESS && [PROCESS_TABLE + (iter * 16) + 5] == currentPID) then
+				[PROCESS_TABLE + (iter * 16) + 4] = READY;	
+			endif;
+			if([PROCESS_TABLE + (iter * 16) + 2] == currentPID) then
+				[PROCESS_TABLE + (iter * 16) + 2] = -1;
+			endif;
+			iter = iter + 1;
+		endwhile;
+	endif;
+	
+	multipush(R1,R2);
+	R1 = 4;
+	call MOD_1;
+	multipop(R1,R2);
+	
+	multipush(R1,R2);
+	R1 = 2;
+	call MOD_1; 
+	multipop(R1,R2);
+	
+	[PROCESS_TABLE + (currentPID * 16) + 4] = TERMINATED;
+	
+	return;
+endif;
+
+//Free Page Table
+if(functionNum == 4) then
+	alias ptbr R3;
+	ptbr = [PROCESS_TABLE + (currentPID*16) + 14];
+	
+	[ptbr + 0] = -1;
+	[ptbr + 1] = "0000";
+	[ptbr + 2] = -1;
+	[ptbr + 3] = "0000";
+	
+	alias iter R4;
+	iter = 2;
+	while(iter < 10) do
+		if([ptbr + 2*iter] != -1) then
+		
+			multipush(R1,R2,R3,R4);
+			R1 = 2;
+			R2 = [ptbr + 2*iter];
+			call MOD_2;
+			multipop(R1,R2,R3,R4);
+		
+			[ptbr + 2*iter] = -1;
+			[ptbr + 2*iter + 1] = "0000";
+		endif;
+		
+		iter = iter + 1;
+		
+	endwhile;
+	
+	alias disk_map_table_entry R5;
+	disk_map_table_entry = DISK_MAP_TABLE + currentPID*10;
+	
+	iter = 2;
+	while(iter < 4) do
+		if([disk_map_table_entry + iter] != -1) then
+			multipush(R0,R1,R2,R3,R4,R5);
+			R1 = 4;
+			R2 = [disk_map_table_entry + iter];
+			call MOD_2;
+			multipop(R0,R1,R2,R3,R4,R5);
+		endif;
+		
+		iter = iter + 1;
+	endwhile;
+	
+	iter = 8;
+	while(iter < 10) do
+		if([disk_map_table_entry + iter] != -1) then
+		
+			multipush(R0,R1,R2,R3,R4,R5);
+			R1 = 4;
+			R2 = [disk_map_table_entry + iter];
+			call MOD_2;
+			multipop(R0,R1,R2,R3,R4,R5);
+			
+		endif;
+		iter = iter + 1;
+	endwhile;
+
+	[disk_map_table_entry + 0] = -1;
+	[disk_map_table_entry + 1] = -1;
+	[disk_map_table_entry + 2] = -1;
+	[disk_map_table_entry + 3] = -1;
+	[disk_map_table_entry + 4] = -1;
+	[disk_map_table_entry + 5] = -1;
+	[disk_map_table_entry + 6] = -1;
+	[disk_map_table_entry + 7] = -1;
+	[disk_map_table_entry + 8] = -1;
+	[disk_map_table_entry + 9] = -1;
+	
+	
+	return;
+	
+endif;
+
+
+//Kill All
+if(functionNum == 5) then
+	alias iter R3;
+	
+	iter = 0;
+	while(iter < MAX_FILE_NUM) do
+		if([INODE_TABLE + iter* 16 + 1] != -1) then
+			multipush(R1,R2,R3);
+			R1 = 4;
+			R2 = currentPID;
+			R3 = iter;
+			call MOD_0;
+			multipop(R1,R2,R3);
+		endif;
+		iter = iter + 1;
+	endwhile;
+	
+	iter = 2;
+	while(iter < 16) do
+		if(iter != 15 && iter != 14) then
+			if(iter != currentPID && [PROCESS_TABLE + iter*16 + 4] != TERMINATED) then
+				multipush(R1,R2,R3);
+				R1 = 3;
+				R2 = iter;
+				call MOD_1;
+				multipop(R1,R2,R3);
+			
+			endif;
+		endif;
+		iter = iter + 1;
+	endwhile;
+	
+	iter = 0;
+	while(iter < MAX_FILE_NUM) do
+		if([INODE_TABLE + iter* 16 + 1] != -1) then
+			multipush(R1,R2,R3);
+			R1 = 5;
+			R2 = currentPID;
+			R3 = iter;
+			call MOD_0;
+			multipop(R1,R2,R3);
+		endif;
+		iter = iter + 1;
+	endwhile;
+	return;
+endif;
+return; 

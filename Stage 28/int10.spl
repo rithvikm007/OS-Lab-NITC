@@ -1,0 +1,16 @@
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 9] = 10;
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13] = SP;
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 11] * 512 - 1;
+
+R1 = 1;
+call MOD_8;
+
+R1 = 3;
+R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+call MOD_1;
+
+R1 = 4;
+R2 = ACCESS_LOCK_TABLE;
+call MOD_8;
+
+call MOD_5;

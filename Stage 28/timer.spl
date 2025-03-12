@@ -1,0 +1,71 @@
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE+ 5*CORE + 1] * 16) + 13] = SP;
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE+ 5*CORE + 1] * 16) + 11] * 512 - 1;
+
+backup;
+
+if([SYSTEM_STATUS_TABLE + 5] != 0 && CORE == PRIMARY_CORE) then
+	
+	if([SYSTEM_STATUS_TABLE + 5*CORE + 1] == 15) then
+	
+		R1 = 1;
+		call MOD_8;
+		
+		if([SYSTEM_STATUS_TABLE + 5] == SWAP_OUT) then
+			R1 = SWAP_OUT;
+			R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+			call MOD_6;
+		else
+			R1 = SWAP_IN;
+			R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+			call MOD_6;
+		endif;
+		R1 = 4;
+		R2 = ACCESS_LOCK_TABLE;
+		call MOD_8;
+	
+	endif;
+else
+	if(CORE == PRIMARY_CORE) then
+		if([SYSTEM_STATUS_TABLE + 2] < MEM_LOW) then
+			[SYSTEM_STATUS_TABLE + 5] = SWAP_OUT;
+		else
+			if([SYSTEM_STATUS_TABLE + 4] > 0) then
+			
+				R1 = 3;
+				while(R1 < 15) do
+					if([PROCESS_TABLE + R1*16 + 6] == 1 && [PROCESS_TABLE + R1*16 + 4] == READY && [PROCESS_TABLE + R1*16] > MAX_TICK) then
+						[SYSTEM_STATUS_TABLE + 5] = SWAP_IN;
+						break;
+					endif;
+					R1 = R1 + 1;
+				endwhile;
+			
+				if([SYSTEM_STATUS_TABLE + 2] > MEM_HIGH) then
+					[SYSTEM_STATUS_TABLE + 5] = SWAP_IN;
+				endif;
+			endif;
+		endif;
+	endif;
+
+endif;
+
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 4] = READY;
+
+alias iter R1;
+
+iter = 0;
+while(iter < 16) do
+	if([PROCESS_TABLE + iter*16 + 4] != TERMINATED) then
+		[PROCESS_TABLE + iter*16] = [PROCESS_TABLE + iter*16] + 1;
+	endif;
+	iter = iter + 1;
+endwhile;
+
+call MOD_5;
+
+restore;
+
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13];
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 9] = 0;
+
+ireturn;

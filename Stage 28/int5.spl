@@ -1,0 +1,237 @@
+alias pte R2;
+alias userSp R3;
+alias currentPID R6;
+
+currentPID = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+
+pte = PROCESS_TABLE + (currentPID * 16);
+
+userSp = SP;
+[pte + 13] = SP;
+SP = [pte + 11] * 512 - 1;
+
+multipush(R2,R3,R6);
+R1 = 1;
+call MOD_8;
+multipop(R2,R3,R6);
+
+alias syscallNum R1;
+alias ptbr R4;
+alias retAddr R5;
+ptbr = [pte + 14];
+
+syscallNum = [[ptbr + 2*((userSp - 5)/512)] * 512 + (userSp - 5)%512]; 
+ 
+retAddr = [ptbr + 2*((userSp - 1)/512)] * 512 + (userSp - 1)%512;
+
+//Open
+if(syscallNum == 2) then
+	alias fileName R7;
+	fileName = [[ptbr + 2*((userSp - 4)/512)] * 512 + (userSp - 4)%512];
+	
+	alias iter R8;
+
+	[pte + 9] = 2;
+	
+	iter = 0;
+	while(iter < 8) do
+		if([([pte + 11] * 512) + 496 + 2*iter] == -1) then
+			break;
+		endif;
+		iter = iter + 1;
+	endwhile;
+	
+	if(iter == 8) then
+		[retAddr] = -3;
+		[pte + 9] = 0;
+		
+		multipush(R3);
+		//release kernel lock
+		R1 = 4;
+		R2 = ACCESS_LOCK_TABLE;
+		call MOD_8;
+		multipop(R3);
+		
+		SP = userSp;
+		ireturn;
+	endif;
+	
+	multipush(R1,R2,R3,R4,R5,R6,R7,R8);
+	R1 = 3;
+	R2 = currentPID;
+	R3 = fileName;
+	call MOD_3;
+	multipop(R1,R2,R3,R4,R5,R6,R7,R8);
+
+	if(R0 < 0) then
+		[retAddr] = R0;
+		[pte + 9] = 0;
+		
+		multipush(R3);
+		//release kernel lock
+		R1 = 4;
+		R2 = ACCESS_LOCK_TABLE;
+		call MOD_8;
+		multipop(R3);
+		
+		SP = userSp;
+		ireturn;
+	endif;
+	
+	[([pte + 11] * 512) + 496 + 2*iter] = FILE;
+	[([pte + 11] * 512) + 496 + 2*iter + 1] = R0;
+	
+	
+	[retAddr] = iter;
+	[pte + 9] = 0;
+	
+	multipush(R3);
+	R1 = 4;
+	R2 = ACCESS_LOCK_TABLE;
+	call MOD_8;
+	multipop(R3);
+		
+	SP = userSp;
+	ireturn;
+endif;
+
+
+
+//Close(3) or Seek(6)
+if(syscallNum == 3 || syscallNum == 6) then
+	alias fileDesc R7;
+	fileDesc = [[ptbr + 2*((userSp - 4)/512)] * 512 + (userSp - 4)%512];
+
+	alias offset R8;
+	offset = [[ptbr + 2*((userSp - 3)/512)] * 512 + (userSp - 3)%512];
+	
+	[pte + 9] = syscallNum;
+	
+	if(fileDesc < 0 || fileDesc > 7) then
+		[retAddr] = -1;
+		[pte + 9] = 0;
+		
+		multipush(R3);
+		R1 = 4;
+		R2 = ACCESS_LOCK_TABLE;
+		call MOD_8;
+		multipop(R3);
+		
+		SP = userSp;
+		ireturn;
+	endif;
+	
+	if([([pte + 11] * 512) + 496 + 2*fileDesc] == -1 || [([pte + 11] * 512) + 496 + 2*fileDesc] != FILE) then
+		[retAddr] = -1;
+		[pte + 9] = 0;
+		
+		multipush(R3);
+		R1 = 4;
+		R2 = ACCESS_LOCK_TABLE;
+		call MOD_8;
+		multipop(R3);
+		
+		SP = userSp;
+		ireturn;
+	endif;
+	
+	alias open_ft_index R9;
+	open_ft_index = [([pte + 11] * 512) + 496 + 2*fileDesc + 1];
+	
+	if(syscallNum == 6) then
+		alias inode_index R10;
+		inode_index = [OPEN_FILE_TABLE + open_ft_index*4];
+		multipush(R1,R2,R3,R4,R5,R6,R7,R8,R9,R10);
+		R1 = 4;
+		R2 = currentPID;
+		R3 = inode_index;
+		call MOD_0;
+		multipop(R1,R2,R3,R4,R5,R6,R7,R8,R9,R10);
+	
+		if(R0 == -1) then
+			[retAddr] = -1;
+			[pte + 9] = 0;
+			
+			multipush(R3);
+			R1 = 4;
+			R2 = ACCESS_LOCK_TABLE;
+			call MOD_8;
+			multipop(R3);
+		
+			SP = userSp;
+			ireturn;
+		endif;
+	
+		alias lseek R11;
+		alias fileSize R12;
+		lseek = OPEN_FILE_TABLE + open_ft_index*4 + 2;
+	
+		if(inode_index == INODE_ROOT) then
+			fileSize = 480;
+		else
+			fileSize = [INODE_TABLE + inode_index * 16 + 2];
+		endif;
+	
+		if([lseek] + offset < 0) then
+		
+			multipush(R1,R2,R3,R4,R5,R6,R7,R8,R9,R10,R11,R12);
+			R1 = 5;
+			R2 = currentPID;
+			R3 = inode_index;
+			call MOD_0;
+			multipop(R1,R2,R3,R4,R5,R6,R7,R8,R9,R10,R11,R12);
+			
+			[retAddr] = -2;
+			[pte + 9] = 0;
+			
+			multipush(R3);
+			R1 = 4;
+			R2 = ACCESS_LOCK_TABLE;
+			call MOD_8;
+			multipop(R3);
+			
+			SP = userSp;
+			ireturn;
+		endif;
+	
+	
+		if(offset == 0) then
+			[lseek] = 0;
+		else
+			if([lseek] + offset > fileSize) then
+				[lseek] = fileSize;
+			else
+				[lseek] = [lseek] + offset;
+			endif;
+		endif;
+	
+		multipush(R1,R2,R3,R4,R5,R6,R7,R8,R9,R10,R11,R12);
+		R1 = 5;
+		R2 = currentPID;
+		R3 = inode_index;
+		call MOD_0;
+		multipop(R1,R2,R3,R4,R5,R6,R7,R8,R9,R10,R11,R12);
+	else
+		multipush(R1,R2,R3,R4,R5,R6,R7,R8,R9);
+		R1 = 4;
+		R2 = currentPID;
+		R3 = open_ft_index;
+		call MOD_3;
+		multipop(R1,R2,R3,R4,R5,R6,R7,R8,R9);
+
+		[([pte + 11] * 512) + 496 + 2*fileDesc] = -1;
+		[([pte + 11] * 512) + 496 + 2*fileDesc + 1] = -1;
+			
+	endif;
+	
+	[retAddr] = 0;
+	[pte + 9] = 0;
+	
+	multipush(R3);
+	R1 = 4;
+	R2 = ACCESS_LOCK_TABLE;
+	call MOD_8;
+	multipop(R3);
+	SP = userSp;
+	ireturn;
+endif;

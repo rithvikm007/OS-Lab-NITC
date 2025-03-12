@@ -1,0 +1,70 @@
+alias userSp R1;
+alias pte R2;
+alias currentPID R3;
+
+userSp = SP;
+pte = PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16;
+currentPID = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+
+[pte + 13] = SP;
+SP = [pte + 11] * 512 - 1;
+
+multipush(R1,R2,R3);
+[SYSTEM_STATUS_TABLE + 7] = 1;
+call MOD_5;
+multipop(R1,R2,R3);
+
+
+multipush(R1,R2,R3);
+R1 = 1;
+call MOD_8;
+multipop(R1,R2,R3);
+
+alias retAddr R4;
+alias iter R5;
+retAddr = [[pte + 14] + 2*((userSp-1)/512)] * 512 + ((userSp - 1)%512);
+
+[pte + 9] = 28;
+
+if(currentPID != 2) then
+	[retAddr] = -1;
+	
+	[pte + 9] = 0;
+	
+	multipush(R1);
+	R1 = 4;
+	R2 = ACCESS_LOCK_TABLE;
+	call MOD_8;
+	multipop(R1);
+	
+	SP = userSp;
+	ireturn;
+endif;
+
+multipush(R1,R2,R3,R4,R5);
+R1 = 5;
+R2 = currentPID;
+call MOD_1;
+multipop(R1,R2,R3,R4,R5);
+
+[SYSTEM_STATUS_TABLE + 7] = 0;
+
+[pte + 4] = TERMINATED;
+
+
+[[[pte+14] + 16]*512] = [[[pte+14] + 8]*512 + 1];
+[pte + 13] = 8*512;
+
+[PROCESS_TABLE + 16 + 4] = READY;
+
+[SYSTEM_STATUS_TABLE] = 0;
+
+
+multipush(R1);
+
+R1 = 4;
+R2 = ACCESS_LOCK_TABLE;
+call MOD_8;
+multipop(R1);
+
+call MOD_5;

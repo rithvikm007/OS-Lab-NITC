@@ -1,0 +1,117 @@
+alias userSp R1;
+alias pte R2;
+alias currentPID R3;
+
+userSp = SP;
+pte = PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16;
+currentPID = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+
+[pte + 13] = SP;
+SP = [pte + 11] * 512 - 1;
+
+multipush(R1,R2,R3);
+R1 = 1;
+call MOD_8;
+multipop(R1,R2,R3);
+
+alias retAddr R4;
+alias username R5;
+alias pwd R6;
+alias iter R7;
+
+retAddr = [[pte + 14] + 2*((userSp-1)/512)] * 512 + ((userSp - 1)%512);
+username = [[[pte + 14] + 2*((userSp-4)/512)] * 512 + ((userSp - 4)%512)];
+pwd = [[[pte + 14] + 2*((userSp-3)/512)] * 512 + ((userSp - 3)%512)];
+
+[pte + 9] = 27;
+
+if(currentPID != 1) then
+	[retAddr] = -2;
+	[pte + 9] = 0;
+	
+	multipush(R1);
+	//release kernel lock
+	R1 = 4;
+	R2 = ACCESS_LOCK_TABLE;
+	call MOD_8;
+	multipop(R1);
+	
+	SP = userSp;
+	ireturn;
+endif;
+
+alias user_tb_entry R8;
+iter = 0;
+while(iter < MAX_USER_NUM) do
+	if(username == [USER_TABLE + 2*iter]) then
+		user_tb_entry = USER_TABLE + 2*iter;
+		break;
+	endif;
+	iter = iter + 1;
+endwhile;
+
+if(iter == MAX_USER_NUM) then
+	[retAddr] = -1;
+	[pte + 9] = 0;
+	
+	multipush(R1);
+	//release kernel lock
+	R1 = 4;
+	R2 = ACCESS_LOCK_TABLE;
+	call MOD_8;
+	multipop(R1);
+	
+	SP = userSp;
+	ireturn;
+endif;
+encrypt pwd;
+
+if([user_tb_entry + 1] != pwd) then
+	[retAddr] = -1;
+	[pte + 9] = 0;
+	
+	multipush(R1);
+	//release kernel lock
+	R1 = 4;
+	R2 = ACCESS_LOCK_TABLE;
+	call MOD_8;
+	multipop(R1);
+	
+	SP = userSp;
+	ireturn;
+endif;
+
+[PROCESS_TABLE + 2*16 + 4] = CREATED;
+[PROCESS_TABLE + 2*16 + 3] = iter; //setting user id
+
+[pte + 4] = WAIT_PROCESS;
+[pte + 5] = 2;
+
+[SYSTEM_STATUS_TABLE] = iter;
+
+multipush(R1,R2,R3,R4,R5,R6,R7,R8);
+R1 = 4;
+R2 = ACCESS_LOCK_TABLE;
+call MOD_8;
+multipop(R1,R2,R3,R4,R5,R6,R7,R8);
+
+multipush(R1,R2,R3,R4,R5,R6,R7,R8);
+call MOD_5;
+multipop(R1,R2,R3,R4,R5,R6,R7,R8);
+
+multipush(R1,R2,R3,R4,R5,R6,R7,R8);
+R1 = 1;
+call MOD_8;
+multipop(R1,R2,R3,R4,R5,R6,R7,R8);
+
+[retAddr] = 0;
+[pte + 9] = 0;
+
+multipush(R1);
+R1 = 4;
+R2 = ACCESS_LOCK_TABLE;
+call MOD_8;
+multipop(R1);
+	
+SP = userSp;
+ireturn;

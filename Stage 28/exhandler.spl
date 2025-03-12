@@ -1,0 +1,82 @@
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 9] = -1;
+
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13] = SP;
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 11] * 512 - 1;
+
+backup;
+multipush(EIP);
+
+R1 = 1;
+call MOD_8;
+
+
+alias userSp R1;
+userSp = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13];
+
+if(EC != 0 || userSp == [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 15] * 512 - 1) then
+
+	if(EC == 1) then
+		print "INSTRUCTION ILLEGAL";
+		print EIP;
+	else
+		if(EC == 2) then
+			print "MEMORY ILLEGAL";
+			print EMA;
+		else
+			print "ARITH ILLEGAL";
+		endif;
+	endif;
+
+	multipush(R0);
+	R1 = 3;
+	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+	call MOD_1;
+	multipop(R0);
+
+	R1 = 4;
+	R2 = ACCESS_LOCK_TABLE;
+	call MOD_8;
+	
+	call MOD_5;
+else
+	alias iter R2;
+	alias ptbr R3;
+	ptbr = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 14];
+	if(EPN >= 4 && EPN <= 7) then 
+			multipush(R1,R2,R3);
+			R2 = [DISK_MAP_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 10) + EPN];
+			R1 = 5;
+			call MOD_2;
+			multipop(R1,R2,R3);
+			
+			[ptbr + EPN*2] = R0;
+			[ptbr + EPN*2 + 1] = "1100";
+	endif;
+	if(EPN >= 2 && EPN <= 3) then 
+		iter = 0;
+		while(iter < 2) do
+			multipush(R1,R2,R3);
+			R1 = 1;
+			call MOD_2;
+			multipop(R1,R2,R3);
+			[ptbr + 4 + 2*iter] = R0;
+			[ptbr + 5 + 2*iter] = "1110";
+			iter = iter + 1;
+		endwhile;
+	endif;
+	
+	[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 9] = 0;
+
+	R1 = 4;
+	R2 = ACCESS_LOCK_TABLE;
+	call MOD_8;
+	
+	multipop(EIP);
+	restore;
+	
+	SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13];
+	SP = SP + 1;
+	[[[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 14] + 2*((SP)/512)] * 512 + ((SP)%512)] = EIP;
+	
+	ireturn;
+endif;

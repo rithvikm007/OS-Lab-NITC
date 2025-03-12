@@ -1,0 +1,205 @@
+alias userSp R1;
+alias currentPID R2;
+alias process_table_entry R4;
+
+currentPID = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
+process_table_entry = PROCESS_TABLE + (currentPID * 16);
+
+[process_table_entry + 13] = SP;
+userSp = SP;
+SP = [process_table_entry + 11] * 512 - 1;
+
+multipush(R1,R2,R4);
+R1 = 1;
+call MOD_8;
+multipop(R1,R2,R4);
+
+
+alias childPID R3;
+
+multipush(R1,R2,R3);
+R1 = 1;
+call MOD_1;
+multipop(R1,R2,R3);
+
+childPID = R0;
+
+alias child_pt_entry R5;
+alias ptbr R6;
+alias iter R7;
+
+ptbr = [process_table_entry + 14];
+[process_table_entry + 9] = 8;
+child_pt_entry = PROCESS_TABLE + (childPID * 16);
+
+if(childPID == -1) then
+	[[ptbr + 2 * ((userSp - 1)/512)] * 512 + ((userSp - 1)%512)] = -1;
+	[process_table_entry + 9] = 0;
+	
+	multipush(R1);
+	R1 = 4;
+	R2 = ACCESS_LOCK_TABLE;
+	call MOD_8;
+	multipop(R1);
+	
+	SP = userSp;
+	ireturn;
+endif;
+
+iter = 0;
+while(iter < 2) do
+
+	if([ptbr + 2*iter + 4] == -1) then
+	
+		multipush(R1,R2,R3,R4,R5,R6,R7);
+		R1 = 1;
+		call MOD_2;
+		multipop(R1,R2,R3,R4,R5,R6,R7);
+		
+		[ptbr + 2*iter + 4] = R0;
+		[ptbr + 2*iter + 5] = "1110";
+		
+	endif;
+	
+	iter = iter + 1;
+	
+endwhile;
+
+alias childPTBR R8;
+childPTBR = [child_pt_entry + 14];
+iter = 0;
+while(iter < 2) do
+
+		multipush(R1,R2,R3,R4,R5,R6,R7,R8);
+		R1 = 1;
+		call MOD_2;
+		multipop(R1,R2,R3,R4,R5,R6,R7,R8);
+		
+		[childPTBR + 2*iter + 16] = R0;
+		[childPTBR + 2*iter + 17] = "0110";
+	iter = iter + 1;
+	
+endwhile;
+
+multipush(R1,R2,R3,R4,R5,R6,R7,R8);
+R1 = 1;
+call MOD_2;
+multipop(R1,R2,R3,R4,R5,R6,R7,R8);
+
+[child_pt_entry + 11] = R0;
+
+[child_pt_entry + 3] = [process_table_entry + 3];  
+[child_pt_entry + 6] = [process_table_entry + 6]; 
+[child_pt_entry + 10] = [process_table_entry + 10];
+[child_pt_entry + 13] = [process_table_entry + 13]; 
+[child_pt_entry + 7] = [process_table_entry + 7];
+
+[child_pt_entry + 0] = 0; 
+[child_pt_entry + 9] = 0; 
+[child_pt_entry + 12] = 0; 
+
+[child_pt_entry + 2] = currentPID; 
+
+iter = 0;
+while(iter < 8) do
+	R9 = ([child_pt_entry + 11] * 512) + 496 + 2*iter;
+	R10 = ([process_table_entry + 11] * 512) + 496 + 2*iter;
+	
+	[R9] = [R10];
+	[R9 + 1] = [R10 + 1];
+	
+	if([R9] == SEMAPHORE) then
+		R11 = SEMAPHORE_TABLE + ([R9 + 1]) * 4 + 1;
+		[R11] = [R11] + 1;
+	endif;
+	
+	if([R9] == FILE) then
+		R11 = OPEN_FILE_TABLE + ([R9 + 1]) * 4 + 1;
+		[R11] = [R11] + 1;
+	endif;
+	
+	iter = iter + 1;
+endwhile;
+
+
+alias disk_map_table_entry_c R9;
+alias disk_map_table_entry_p R10;
+disk_map_table_entry_p = DISK_MAP_TABLE + currentPID*10;
+disk_map_table_entry_c = DISK_MAP_TABLE + childPID*10;
+
+iter = 0;
+while(iter < 10) do
+	[disk_map_table_entry_c + iter] = [disk_map_table_entry_p + iter];
+	iter = iter + 1;
+endwhile;
+
+
+//library + heap
+iter = 0;
+while(iter<8) do 
+	[childPTBR + iter] = [ptbr+ iter];
+	iter = iter + 1;
+endwhile;
+
+R11 = MEMORY_FREE_LIST + [ptbr + 0];
+[R11] = [R11] + 1;
+
+R11 = MEMORY_FREE_LIST + [ptbr + 2];
+[R11] = [R11] + 1;
+
+R11 = MEMORY_FREE_LIST + [ptbr + 4];
+[R11] = [R11] + 1;
+
+R11 = MEMORY_FREE_LIST + [ptbr + 6];
+[R11] = [R11] + 1;
+
+iter = 0;
+
+while(iter < 4) do
+	R11 = ptbr + 2*iter + 8;
+	[childPTBR + 2*iter + 8] = [R11];
+	[childPTBR + 2*iter + 9] = [R11 + 1];
+	
+	if([R11] != - 1) then
+		 R11 = MEMORY_FREE_LIST + [R11];
+		 [R11] = [R11] + 1;
+	endif;
+	iter = iter + 1;
+endwhile;
+
+alias iter2 R11;
+iter2 = 0;
+iter = 0;
+
+while(iter2<2) do
+	
+	while(iter<512) do
+		[[childPTBR + 16 + 2*iter2] * 512 + iter] = [[ptbr + 16 + 2*iter2] * 512 + iter];
+		iter = iter + 1;
+	endwhile;
+	iter2 = iter2 + 1;
+endwhile;
+
+[[child_pt_entry + 11] * 512] = BP;
+
+alias childSP_ret R12;
+childSP_ret = [child_pt_entry + 13] - 1;
+
+[[childPTBR + 2 * ((childSP_ret)/ 512)] * 512 + ((childSP_ret) % 512)] = 0;
+
+alias parentSP_ret R13;
+parentSP_ret = [process_table_entry + 13] - 1;
+[[ptbr + 2 * ((parentSP_ret)/ 512)] * 512 + ((parentSP_ret) % 512)] = childPID;
+
+[process_table_entry + 9] = 0;
+
+[child_pt_entry + 4] = CREATED;
+
+multipush(R1);
+R1 = 4;
+R2 = ACCESS_LOCK_TABLE;
+call MOD_8;
+multipop(R1);
+
+SP = userSp;
+ireturn;
